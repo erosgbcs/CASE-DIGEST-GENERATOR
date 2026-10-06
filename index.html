@@ -133,9 +133,171 @@
             display: inline-block;
             vertical-align: middle;
         }
+
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(255, 204, 224, 0.72), transparent 42%),
+                radial-gradient(ellipse at 80% 80%, rgba(233, 213, 255, 0.72), transparent 42%),
+                #fffafd;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 650ms ease, visibility 650ms ease;
+        }
+
+        .loading-screen.is-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .loading-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            animation: loader-enter 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .loading-logo {
+            position: relative;
+            display: grid;
+            width: 104px;
+            height: 104px;
+            place-items: center;
+            margin-bottom: 26px;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 32px;
+            background: linear-gradient(145deg, #fff0f7, #f3e8ff 70%, #e8fff9);
+            box-shadow: 0 18px 50px rgba(237, 28, 108, 0.16), inset 0 1px 0 #fff;
+            animation: loader-float 2.8s ease-in-out infinite;
+        }
+
+        .loading-logo::before {
+            position: absolute;
+            inset: -9px;
+            border: 1.5px solid rgba(255, 110, 166, 0.32);
+            border-radius: 39px;
+            content: "";
+            animation: loader-ring 2.4s ease-out infinite;
+        }
+
+        .loading-logo svg {
+            width: 48px;
+            height: 48px;
+            color: #ed1c6c;
+        }
+
+        .loading-title {
+            margin: 0;
+            background: linear-gradient(100deg, #ed1c6c, #a855f7 58%, #0d9488);
+            background-clip: text;
+            color: transparent;
+            font-size: clamp(2rem, 8vw, 2.75rem);
+            font-weight: 800;
+            letter-spacing: -0.055em;
+        }
+
+        .loading-caption {
+            margin: 8px 0 24px;
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+
+        .loading-dots {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff6ea6;
+            animation: loader-dot 1s ease-in-out infinite;
+        }
+
+        .loading-dots span:nth-child(2) {
+            background: #c084fc;
+            animation-delay: 140ms;
+        }
+
+        .loading-dots span:nth-child(3) {
+            background: #2dd4bf;
+            animation-delay: 280ms;
+        }
+
+        .loading-credit {
+            margin-top: 34px;
+            color: #94a3b8;
+            font-size: 0.78rem;
+            letter-spacing: 0.04em;
+        }
+
+        .loading-credit strong {
+            color: #c90e56;
+            font-weight: 700;
+        }
+
+        @keyframes loader-enter {
+            from { opacity: 0; transform: translateY(14px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes loader-float {
+            0%, 100% { transform: translateY(0) rotate(-2deg); }
+            50% { transform: translateY(-8px) rotate(2deg); }
+        }
+
+        @keyframes loader-ring {
+            0% { opacity: 0.65; transform: scale(0.96); }
+            100% { opacity: 0; transform: scale(1.18); }
+        }
+
+        @keyframes loader-dot {
+            0%, 60%, 100% { opacity: 0.45; transform: translateY(0) scale(0.85); }
+            30% { opacity: 1; transform: translateY(-5px) scale(1); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .loading-content,
+            .loading-logo,
+            .loading-logo::before,
+            .loading-dots span {
+                animation: none;
+            }
+
+            .loading-screen {
+                transition-duration: 150ms;
+            }
+        }
     </style>
 </head>
 <body class="font-sans bg-gradient-to-br from-blush-50 via-lilac-50 to-cream-50 bg-fixed text-slate-800 min-h-screen flex justify-center items-start p-3 sm:p-6 md:p-8 overflow-x-hidden relative">
+
+    <div id="loadingScreen" class="loading-screen" role="status" aria-live="polite" aria-label="Loading Case Digest">
+        <div class="loading-content">
+            <div class="loading-logo" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3v18"/>
+                    <path d="M5 7l7-4 7 4"/>
+                    <path d="M5 7l-2 6a3 3 0 0 0 6 0L7 7"/>
+                    <path d="M19 7l-2 6a3 3 0 0 0 6 0l-2-6"/>
+                    <path d="M3 21h18"/>
+                </svg>
+            </div>
+            <h1 class="loading-title">Case Digest</h1>
+            <p class="loading-caption">Getting your workspace ready</p>
+            <div class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+            <p class="loading-credit">Made by <strong>your bf</strong> <span aria-hidden="true">♥</span></p>
+        </div>
+    </div>
 
     <!-- Floating Background Blobs -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
@@ -285,7 +447,7 @@
                     <svg class="icon w-3 h-3 text-blush-400" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
                     </svg>
-                    Pre‑filled with a default key. You can replace it with your own.
+                    Enter your own Gemini API key to generate a digest.
                 </p>
             </div>
 

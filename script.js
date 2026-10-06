@@ -1,6 +1,24 @@
 // script.js — with SVG icons
 
 (function() {
+    const loadingScreen = document.getElementById('loadingScreen');
+    const loadingStartedAt = performance.now();
+
+    function hideLoadingScreen() {
+        const minimumDisplayTime = 900;
+        const remainingDisplayTime = Math.max(0, minimumDisplayTime - (performance.now() - loadingStartedAt));
+        window.setTimeout(() => {
+            loadingScreen.classList.add('is-hidden');
+            window.setTimeout(() => loadingScreen.remove(), 700);
+        }, remainingDisplayTime);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hideLoadingScreen, { once: true });
+    } else {
+        hideLoadingScreen();
+    }
+
     // DOM elements
     const lawphilRef = document.getElementById('lawphilRef');
     const caseTextArea = document.getElementById('caseText');
