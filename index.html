@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Case Digest ✨ LawPhil + Gemini</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        blush: {
+                            50: '#fff5f9', 100: '#ffe4ef', 200: '#ffcce0', 300: '#ffa3c7',
+                            400: '#ff6ea6', 500: '#ff3d85', 600: '#ed1c6c', 700: '#c90e56',
+                            800: '#a60f49', 900: '#8a1240',
+                        },
+                        lilac: {
+                            50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe',
+                            400: '#c084fc', 500: '#a855f7', 600: '#9333ea', 700: '#7e22ce',
+                            800: '#6b21a8', 900: '#581c87',
+                        },
+                        mint: {
+                            50: '#f0fdf9', 100: '#ccfbef', 200: '#99f6e0', 300: '#5eead4',
+                            400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e',
+                            800: '#115e59', 900: '#134e4a',
+                        },
+                        cream: {
+                            50: '#fffdf7', 100: '#fff9e6', 200: '#fff2cc',
+                        },
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+                            '50%': { transform: 'translate(40px, -20px) scale(1.15)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+                            '50%': { transform: 'translateY(-14px) rotate(8deg)' },
+                        },
+                        twinkle: {
+                            '0%, 100%': { opacity: '0.3', transform: 'scale(1) rotate(0deg)' },
+                            '50%': { opacity: '1', transform: 'scale(1.25) rotate(15deg)' },
+                        },
+                        bobble: {
+                            '0%, 100%': { transform: 'translateY(0) rotate(-4deg)' },
+                            '50%': { transform: 'translateY(-8px) rotate(4deg)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { boxShadow: 'inset 0 -3px 0 rgba(255,109,166,0.15), 0 0 0 0 rgba(255,109,166,0.3)' },
+                            '50%': { boxShadow: 'inset 0 -3px 0 rgba(255,109,166,0.15), 0 0 0 14px rgba(255,109,166,0)' },
+                        },
+                        dotPulse: {
+                            '0%, 100%': { boxShadow: '0 0 0 4px rgba(255,109,166,0.2)' },
+                            '50%': { boxShadow: '0 0 0 9px rgba(255,109,166,0.05)' },
+                        },
+                        spinSlow: { to: { transform: 'rotate(360deg)' } },
+                        cardIn: {
+                            from: { opacity: '0', transform: 'translateY(24px) scale(0.97)' },
+                            to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+                        },
+                        fadeUp: {
+                            from: { opacity: '0', transform: 'translateY(14px)' },
+                            to: { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        shake: {
+                            '0%': { transform: 'translateX(-8px)', opacity: '0' },
+                            '25%': { transform: 'translateX(6px)' },
+                            '50%': { transform: 'translateX(-4px)' },
+                            '75%': { transform: 'translateX(2px)' },
+                            '100%': { transform: 'translateX(0)', opacity: '1' },
+                        },
+                        heartbeat: {
+                            '0%, 100%': { transform: 'scale(1)' },
+                            '25%': { transform: 'scale(1.15)' },
+                            '50%': { transform: 'scale(0.95)' },
+                            '75%': { transform: 'scale(1.05)' },
+                        },
+                        wiggle: {
+                            '0%, 100%': { transform: 'rotate(0deg)' },
+                            '25%': { transform: 'rotate(-12deg)' },
+                            '75%': { transform: 'rotate(12deg)' },
+                        },
+                    },
+                    animation: {
+                        blob: 'blob 14s ease-in-out infinite',
+                        float: 'float 6s ease-in-out infinite',
+                        twinkle: 'twinkle 3s ease-in-out infinite',
+                        bobble: 'bobble 3s ease-in-out infinite',
+                        'pulse-glow': 'pulseGlow 4s ease-in-out infinite',
+                        'dot-pulse': 'dotPulse 2s ease-in-out infinite',
+                        'spin-slow': 'spinSlow 0.8s linear infinite',
+                        'card-in': 'cardIn 0.7s cubic-bezier(0.22, 1, 0.36, 1)',
+                        'fade-up': 'fadeUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards',
+                        shake: 'shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97)',
+                        heartbeat: 'heartbeat 1.5s ease-in-out infinite',
+                        wiggle: 'wiggle 0.6s ease-in-out',
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #ffe4ef; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #ff6ea6, #c084fc); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #ff3d85, #a855f7); }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.78);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        @media screen and (max-width: 767px) {
+            input, textarea, select { font-size: 16px !important; }
+        }
+
+        ::selection { background: #ffcce0; color: #8a1240; }
+
+        /* SVG icon default size */
+        .icon {
+            width: 1em;
+            height: 1em;
+            flex-shrink: 0;
+            display: inline-block;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="font-sans bg-gradient-to-br from-blush-50 via-lilac-50 to-cream-50 bg-fixed text-slate-800 min-h-screen flex justify-center items-start p-3 sm:p-6 md:p-8 overflow-x-hidden relative">
+
+    <!-- Floating Background Blobs -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div class="absolute -top-32 -left-32 w-[320px] h-[320px] sm:w-[420px] sm:h-[420px] rounded-full blur-3xl opacity-60 animate-blob"
+             style="background: radial-gradient(circle, #ffcce0, transparent 70%); animation-delay: 0s;"></div>
+        <div class="absolute -bottom-40 -right-32 w-[340px] h-[340px] sm:w-[460px] sm:h-[460px] rounded-full blur-3xl opacity-60 animate-blob"
+             style="background: radial-gradient(circle, #e9d5ff, transparent 70%); animation-delay: -6s;"></div>
+        <div class="absolute top-1/3 left-1/2 w-[260px] h-[260px] sm:w-[340px] sm:h-[340px] rounded-full blur-3xl opacity-50 animate-blob"
+             style="background: radial-gradient(circle, #fff2cc, transparent 70%); animation-delay: -12s;"></div>
+
+        <!-- Floating decorative SVG icons -->
+        <svg class="icon absolute top-16 right-12 text-3xl text-blush-300 animate-float opacity-60 select-none" viewBox="0 0 24 24" fill="currentColor" style="animation-delay: -2s; width: 32px; height: 32px;">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+        <svg class="icon absolute bottom-24 left-10 text-2xl text-lilac-300 animate-float opacity-60 select-none" viewBox="0 0 24 24" fill="currentColor" style="animation-delay: -8s; width: 26px; height: 26px;">
+            <path d="M12 2l1.5 6L20 9.5 14 12l-2 6-2-6-6-2.5L9.5 8 12 2z"/>
+        </svg>
+        <svg class="icon absolute top-1/2 right-1/4 text-xl text-mint-300 animate-float opacity-50 select-none" viewBox="0 0 24 24" fill="currentColor" style="animation-delay: -14s; width: 22px; height: 22px;">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+        </svg>
+    </div>
+
+    <!-- Main Card -->
+    <main class="relative z-10 w-full max-w-4xl glass rounded-[28px] sm:rounded-[36px] border-2 border-white/80 shadow-[0_10px_40px_-10px_rgba(255,61,133,0.25)] hover:shadow-[0_25px_60px_-15px_rgba(255,61,133,0.35)] transition-shadow duration-500 animate-card-in p-5 sm:p-8 md:p-10">
+
+        <!-- Sparkles (SVG stars) -->
+        <svg class="icon absolute top-4 right-6 sm:top-6 sm:right-8 text-blush-400 text-xl animate-twinkle pointer-events-none" viewBox="0 0 24 24" fill="currentColor" style="width: 20px; height: 20px;">
+            <path d="M12 1l2.4 7.2L21.6 12l-7.2 2.4L12 22.8l-2.4-7.2L2.4 12l7.2-2.4L12 1z"/>
+        </svg>
+        <svg class="icon absolute top-11 right-14 sm:top-14 sm:right-20 text-lilac-400 text-sm animate-twinkle pointer-events-none" viewBox="0 0 24 24" fill="currentColor" style="animation-delay:1.5s; width: 14px; height: 14px;">
+            <path d="M12 2l1.8 5.4L19.2 9l-5.4 1.8L12 16.2l-1.8-5.4L4.8 9l5.4-1.8L12 2z"/>
+        </svg>
+        <svg class="icon absolute bottom-8 left-8 text-blush-300 animate-twinkle pointer-events-none" viewBox="0 0 24 24" fill="currentColor" style="animation-delay:2.5s; width: 18px; height: 18px;">
+            <path d="M12 1l2.4 7.2L21.6 12l-7.2 2.4L12 22.8l-2.4-7.2L2.4 12l7.2-2.4L12 1z"/>
+        </svg>
+
+        <!-- Header -->
+        <header class="mb-6 sm:mb-8">
+            <div class="flex items-center gap-3 sm:gap-4 mb-2">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 grid place-items-center rounded-2xl bg-gradient-to-br from-blush-100 to-lilac-100 shadow-inner animate-pulse-glow">
+                    <svg class="w-7 h-7 sm:w-8 sm:h-8 text-blush-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3v18"/>
+                        <path d="M5 7l7-4 7 4"/>
+                        <path d="M5 7l-2 6a3 3 0 0 0 6 0L7 7"/>
+                        <path d="M19 7l-2 6a3 3 0 0 0 6 0l-2-6"/>
+                        <path d="M3 21h18"/>
+                    </svg>
+                </div>
+                <div class="min-w-0">
+                    <h1 class="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-blush-500 via-lilac-500 to-mint-500 bg-clip-text text-transparent leading-tight">
+                        Case Digest
+                    </h1>
+                    <div class="text-xs sm:text-sm text-slate-500 flex flex-wrap items-center gap-1.5 mt-1">
+                        <span>Powered by</span>
+                        <strong class="text-blush-600 font-bold">LawPhil</strong>
+                        <span>+</span>
+                        <strong class="text-lilac-600 font-bold">Gemini</strong>
+                        <span class="inline-block bg-gradient-to-r from-blush-100 to-lilac-100 text-blush-700 text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-bold border border-blush-200">
+                            gemini-3.6-flash
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <p class="text-slate-500 text-sm sm:text-base flex items-center gap-1.5">
+                Paste a case, get a neat digest in seconds
+                <svg class="icon w-4 h-4 text-blush-400 animate-heartbeat" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+            </p>
+        </header>
+
+        <!-- Inputs -->
+        <section class="flex flex-col gap-4 sm:gap-5 mb-6 sm:mb-8">
+            <!-- LawPhil Reference -->
+            <div class="flex flex-col gap-2 animate-fade-up" style="animation-delay:0.05s;">
+                <label for="lawphilRef" class="flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-600">
+                    <svg class="icon w-4 h-4 text-blush-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                    <span>LawPhil reference</span>
+                    <span class="ml-auto text-[10px] sm:text-xs bg-mint-100 text-mint-800 px-2.5 py-0.5 rounded-full font-bold normal-case tracking-normal border border-mint-200">
+                        paste only
+                    </span>
+                </label>
+                <input type="text" id="lawphilRef" readonly
+                       placeholder="Paste a LawPhil URL or G.R. No. here…"
+                       class="w-full px-4 py-3 rounded-2xl border-2 border-blush-100 bg-gradient-to-br from-slate-50 to-blush-50/40 text-slate-500 text-sm sm:text-base cursor-default outline-none transition-all duration-300">
+                <p class="text-[11px] sm:text-xs text-slate-400 pl-1 flex items-center gap-1">
+                    <svg class="icon w-3 h-3" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                    </svg>
+                    Read‑only field — just a note for you.
+                </p>
+            </div>
+
+            <!-- Case Text -->
+            <div class="flex flex-col gap-2 animate-fade-up" style="animation-delay:0.1s;">
+                <label for="caseText" class="flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-600">
+                    <svg class="icon w-4 h-4 text-blush-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="8" y1="13" x2="16" y2="13"/>
+                        <line x1="8" y1="17" x2="16" y2="17"/>
+                        <line x1="8" y1="9" x2="10" y2="9"/>
+                    </svg>
+                    <span>Case text</span>
+                </label>
+                <textarea id="caseText"
+                          placeholder="Paste the full case text here — title, facts, issues, and decision. The AI will digest it ✨"
+                          class="w-full px-4 py-3 rounded-2xl border-2 border-blush-100 bg-white/80 text-slate-800 text-sm sm:text-base outline-none resize-y min-h-[140px] sm:min-h-[160px] leading-relaxed transition-all duration-300 focus:border-blush-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(255,109,166,0.15)] focus:-translate-y-0.5 hover:border-blush-200"></textarea>
+                <p class="text-[11px] sm:text-xs text-slate-400 pl-1 flex items-center gap-1">
+                    <svg class="icon w-3 h-3 text-blush-400" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
+                    </svg>
+                    The digest is based on the text you paste here.
+                </p>
+            </div>
+
+            <!-- Gemini API Key -->
+            <div class="flex flex-col gap-2 animate-fade-up" style="animation-delay:0.15s;">
+                <label for="geminiKey" class="flex items-center gap-2 font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-600">
+                    <svg class="icon w-4 h-4 text-blush-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                    <span>Gemini API key</span>
+                    <span class="ml-auto text-[10px] sm:text-xs bg-orange-100 text-orange-700 px-2.5 py-0.5 rounded-full font-bold normal-case tracking-normal border border-orange-200">
+                        required
+                    </span>
+                </label>
+                <div class="relative">
+                    <input type="password" id="geminiKey" placeholder="Enter your Google AI Studio API key" autocomplete="off"
+                           class="w-full px-4 py-3 pr-12 rounded-2xl border-2 border-blush-100 bg-white/80 text-slate-800 text-sm sm:text-base font-mono outline-none transition-all duration-300 focus:border-blush-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(255,109,166,0.15)] focus:-translate-y-0.5 hover:border-blush-200">
+                    <button type="button" id="toggleKey" aria-label="Toggle key visibility"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all duration-200 hover:bg-blush-100 active:scale-95 text-blush-500">
+                        <svg id="eyeOpen" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <svg id="eyeClosed" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                            <line x1="1" y1="1" x2="23" y2="23"/>
+                        </svg>
+                    </button>
+                </div>
+                <p class="text-[11px] sm:text-xs text-slate-400 pl-1 flex items-center gap-1">
+                    <svg class="icon w-3 h-3 text-blush-400" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                    </svg>
+                    Pre‑filled with a default key. You can replace it with your own.
+                </p>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 mt-1 animate-fade-up" style="animation-delay:0.2s;">
+                <button id="digestBtn"
+                        class="group relative flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl font-bold text-white text-sm sm:text-base bg-gradient-to-br from-blush-400 to-lilac-500 shadow-[0_10px_25px_-8px_rgba(255,61,133,0.6)] hover:shadow-[0_18px_35px_-10px_rgba(255,61,133,0.75)] hover:-translate-y-1 active:translate-y-0 transition-all duration-300 overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0">
+                    <span class="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></span>
+                    <svg class="icon w-5 h-5 group-hover:rotate-[20deg] group-hover:scale-125 transition-transform duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                    <span class="relative">Generate Digest</span>
+                </button>
+                <button id="clearBtn"
+                        class="group flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl font-bold text-slate-600 text-sm sm:text-base bg-white/90 border-2 border-blush-100 hover:border-lilac-300 hover:bg-gradient-to-br hover:from-blush-50 hover:to-lilac-50 hover:text-lilac-700 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+                    <svg class="icon w-5 h-5 group-hover:-rotate-12 transition-transform duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                    </svg>
+                    <span>Clear</span>
+                </button>
+            </div>
+
+            <!-- Status -->
+            <div id="statusMsg"
+                 class="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-blush-50/70 border-2 border-blush-100 text-slate-600 text-xs sm:text-sm min-h-[44px] transition-all duration-300">
+                <span class="w-2.5 h-2.5 rounded-full bg-mint-400 animate-dot-pulse flex-shrink-0"></span>
+                <span>Ready when you are</span>
+            </div>
+        </section>
+
+        <!-- Error -->
+        <div id="errorContainer"></div>
+
+        <!-- Digest Output -->
+        <section id="digestOutput"
+                 class="rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-white/80 to-blush-50/40 border-2 border-blush-100 shadow-inner animate-fade-up">
+            <div class="text-center py-10 sm:py-12">
+                <svg class="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 text-blush-300 animate-bobble" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="9" y1="15" x2="15" y2="15"/>
+                    <line x1="9" y1="11" x2="15" y2="11"/>
+                </svg>
+                <div class="font-bold text-slate-600 text-base sm:text-lg mb-1">Your case digest will appear here</div>
+                <div class="text-xs sm:text-sm text-slate-400 tracking-wide">Facts · Issue · Ruling · Lesson Learned</div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-[11px] sm:text-xs text-slate-400 text-center mt-6 pt-4 border-t-2 border-blush-100/60 flex items-center justify-center gap-1.5">
+            <svg class="icon w-3.5 h-3.5 text-blush-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            Your Gemini API key is never stored. Case text is processed only in your browser.
+        </footer>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
