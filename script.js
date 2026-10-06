@@ -1,6 +1,8 @@
-// script.js — with SVG icons
+// script.js — case digest generation
 
 (function() {
+    const GEMINI_MODEL = 'gemini-3.6-flash';
+
     const loadingScreen = document.getElementById('loadingScreen');
     const loadingStartedAt = performance.now();
 
@@ -8,6 +10,7 @@
         const minimumDisplayTime = 900;
         const remainingDisplayTime = Math.max(0, minimumDisplayTime - (performance.now() - loadingStartedAt));
         window.setTimeout(() => {
+            if (!loadingScreen) return;
             loadingScreen.classList.add('is-hidden');
             window.setTimeout(() => loadingScreen.remove(), 700);
         }, remainingDisplayTime);
@@ -23,31 +26,11 @@
     const lawphilRef = document.getElementById('lawphilRef');
     const caseTextArea = document.getElementById('caseText');
     const geminiKeyInput = document.getElementById('geminiKey');
-    const toggleKeyBtn = document.getElementById('toggleKey');
-    const eyeOpen = document.getElementById('eyeOpen');
-    const eyeClosed = document.getElementById('eyeClosed');
     const digestBtn = document.getElementById('digestBtn');
     const clearBtn = document.getElementById('clearBtn');
     const statusMsg = document.getElementById('statusMsg');
     const digestOutput = document.getElementById('digestOutput');
     const errorContainer = document.getElementById('errorContainer');
-
-    // ---- start with no pre-filled API key ----
-    geminiKeyInput.value = '';
-
-    // ---- toggle API key visibility ----
-    toggleKeyBtn.addEventListener('click', () => {
-        const isPassword = geminiKeyInput.type === 'password';
-        geminiKeyInput.type = isPassword ? 'text' : 'password';
-        if (isPassword) {
-            eyeOpen.classList.add('hidden');
-            eyeClosed.classList.remove('hidden');
-        } else {
-            eyeOpen.classList.remove('hidden');
-            eyeClosed.classList.add('hidden');
-        }
-        toggleKeyBtn.setAttribute('aria-label', isPassword ? 'Hide key' : 'Show key');
-    });
 
     // ---- helper: show status ----
     function setStatus(message, type = 'ready') {
@@ -121,22 +104,15 @@
         lawphilRef.value = '';
         caseTextArea.value = '';
         geminiKeyInput.value = '';
-        geminiKeyInput.type = 'password';
-        eyeOpen.classList.remove('hidden');
-        eyeClosed.classList.add('hidden');
     }
 
     // ---- call Gemini API ----
     async function generateDigest(caseText, apiKey) {
-        if (!apiKey || apiKey.trim().length < 10) {
-            throw new Error('Please enter a valid Gemini API key.');
-        }
-
         if (!caseText || caseText.trim().length < 50) {
             throw new Error('Please paste a longer case text (at least 50 characters).');
         }
 
-        const prompt = `You are a legal analyst. Based on the following Philippine Supreme Court case text, create a case digest with EXACTLY these four sections: **Facts**, **Issue**, **Ruling**, and **Lesson Learned**. 
+        const prompt = `You are a legal analyst. Based on the following Philippine Supreme Court case text, create a case digest with EXACTLY these four sections: **Facts**, **Issue**, **Ruling**, and **Lesson Learned**.
 
 Requirements:
 - Be concise but comprehensive.
@@ -150,15 +126,21 @@ Case text:
 ${caseText}
 """
 
-Return your answer in plain text with the headings "Facts:", "Issue:", "Ruling:", "Lesson Learned:" on separate lines. Do not add extra sections.`;
+Return your answer with the headings "Facts:", "Issue:", "Ruling:", "Lesson Learned:" on separate lines. Do not add extra sections.
+
+FORMATTING RULES (follow strictly):
+- Use **double asterisks** around key legal terms, case names, statutes, and important phrases to make them bold.
+- Use *single asterisks* around Latin terms, case citations, or slight emphasis.
+- Do NOT use markdown headings (#), bullet symbols with hashes, or code blocks.
+- Plain sentences with inline **bold** and *italic* only.`;
 
         setStatus('Gemini is thinking…', 'loading');
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
         const requestBody = {
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 2000 }
-        };
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2 }
+};
 
         try {
             const response = await fetch(url, {
@@ -179,10 +161,10 @@ Return your answer in plain text with the headings "Facts:", "Issue:", "Ruling:"
             return generatedText;
         } catch (err) {
             if (err.message.includes('API key not valid')) {
-                throw new Error('Invalid Gemini API key. Please check your key.');
+                throw new Error('Invalid Gemini API key. Please check the key you entered.');
             }
             if (err.message.includes('not found') || err.message.includes('not supported')) {
-                throw new Error('Model gemini-3.6-flash is not available. Check the model name or your API access.');
+                throw new Error(`Model ${GEMINI_MODEL} is not available. Check the model name or your API access.`);
             }
             throw err;
         }
@@ -294,7 +276,7 @@ Return your answer in plain text with the headings "Facts:", "Issue:", "Ruling:"
                     </h3>
                 </div>
                 <div class="text-sm sm:text-[15px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words bg-white rounded-2xl px-4 py-3.5 border-2 border-blush-100/70 shadow-sm">
-                    ${escapeHtml(s.content)}
+                         ${formatText(s.content)}
                 </div>
             </div>
         `).join('');
@@ -311,14 +293,40 @@ Return your answer in plain text with the headings "Facts:", "Issue:", "Ruling:"
             .replace(/'/g, '&#039;');
     }
 
+    // ---- format text: escape first, then convert markdown to HTML ----
+    function formatText(text) {
+        if (!text) return '';
+
+        // 1. Escape raw HTML so any tags in the AI output are neutralized
+        let html = escapeHtml(text);
+
+        // 2. **bold** → <strong>
+        html = html.replace(/\*\*([^*]+)\*\*/g,
+            '<strong class="font-bold text-slate-900">$1</strong>');
+
+        // 3. __bold__ → <strong> (Gemini sometimes uses this)
+        html = html.replace(/__([^_]+)__/g,
+            '<strong class="font-bold text-slate-900">$1</strong>');
+
+        // 4. *italic* → <em> (after bold is handled, so ** isn't eaten)
+        html = html.replace(/\*([^*\n]+)\*/g,
+            '<em class="italic text-slate-700">$1</em>');
+
+        // 5. _italic_ → <em>
+        html = html.replace(/(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])/g,
+            '<em class="italic text-slate-700">$1</em>');
+
+        return html;
+    }
+
     // ---- main handler ----
     async function handleGenerateDigest() {
         clearError();
         resetDigestDisplay();
         digestBtn.disabled = true;
 
-        const apiKey = geminiKeyInput.value.trim();
         const caseText = caseTextArea.value.trim();
+        const apiKey = geminiKeyInput.value.trim();
 
         if (!caseText) {
             showError('Please paste the case text in the case text area.');
@@ -358,14 +366,6 @@ Return your answer in plain text with the headings "Facts:", "Issue:", "Ruling:"
 
     // ---- digest button ----
     digestBtn.addEventListener('click', handleGenerateDigest);
-
-    // ---- Enter key on API key field ----
-    geminiKeyInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleGenerateDigest();
-        }
-    });
 
     // ---- initial state ----
     resetDigestDisplay();
