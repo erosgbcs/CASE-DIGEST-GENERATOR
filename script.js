@@ -67,6 +67,7 @@ const geminiKeyInput = document.getElementById('geminiKey');
 const restoreKeyBtn = document.getElementById('restoreKeyBtn');
 const digestBtn = document.getElementById('digestBtn');
 const saveBtn = document.getElementById('saveBtn');
+const downloadPdfBtn = document.getElementById('downloadPdfBtn'); // 👈 ADD
 const clearBtn = document.getElementById('clearBtn');
 const statusMsg = document.getElementById('statusMsg');
 const digestOutput = document.getElementById('digestOutput');
@@ -151,10 +152,9 @@ function emptyDigestMarkup() {
 function resetDigestDisplay() {
     digestOutput.innerHTML = emptyDigestMarkup();
 }
-
-function updateSaveButton() {
-    if (!saveBtn) return;
-    saveBtn.disabled = !currentDigest || !cloudReady;
+function updateActionButtons() {
+    if (saveBtn) saveBtn.disabled = !currentDigest || !cloudReady;
+    if (downloadPdfBtn) downloadPdfBtn.disabled = !currentDigest;
 }
 
 function clearAll() {
@@ -169,7 +169,154 @@ function clearAll() {
     activeSavedId = null;
     updateSaveButton();
 }
+/* ------------------------------------------------------------------ */
+/* PDF export (jsPDF)                                                  */
+/* ------------------------------------------------------------------ */
+function stripMarkdown(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/__([^_]+)__/g, '$1')
+        .replace(/\*([^*\n]+)\*/g, '$1')
+        .replace(/(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
 
+function downloadDigestPDF() {
+    if (!currentDigest) {
+        showError('Generate a digest first, then download it as PDF.');
+        return;
+    }
+
+    const lib = window.jspdf;
+    if (!lib || !lib.jsPDF) {
+        showError('PDF library is still loading. Please try again in a moment.');
+        return;
+    }
+    const { jsPDF } = lib;
+
+    try {
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 56;
+        const contentWidth = pageWidth - margin * 2;
+        const lineHeight = 15;
+        let cursorY = margin;
+
+        const ensureSpace = (needed) => {
+            if (cursorY + needed > pageHeight - margin) {
+                doc.addPage();
+                cursorY = margin;
+            }
+        };
+
+        /* Header */
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(200, 30, 90);
+        doc.text('CASE DIGEST', margin, cursorY);
+        cursorY += 14;
+
+        doc.setDrawColor(255, 200, 220);
+        doc.setLineWidth(1);
+        doc.line(margin, cursorY, pageWidth - margin, cursorY);
+        cursorY += 26;
+
+        /* Title */
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(25, 25, 35);
+        const titleLines = doc.splitTextToSize(
+            currentDigest.title || 'Untitled Case Digest',
+            contentWidth
+        );
+        titleLines.forEach(line => {
+            ensureSpace(24);
+            doc.text(line, margin, cursorY);
+            cursorY += 22;
+        });
+
+        cursorY += 6;
+        doc.setDrawColor(255, 200, 220);
+        doc.line(margin, cursorY, pageWidth - margin, cursorY);
+        cursorY += 24;
+
+        /* Sections */
+        const sections = [
+            { label: 'FACTS',           text: currentDigest.sections.facts,  color: [237, 28, 108] },
+            { label: 'ISSUE',           text: currentDigest.sections.issue,  color: [147, 51, 234] },
+            { label: 'RULING',          text: currentDigest.sections.ruling, color: [13, 148, 136] },
+            { label: 'LESSON LEARNED',  text: currentDigest.sections.lesson, color: [234, 88, 12]  },
+        ];
+
+        sections.forEach((s, idx) => {
+            ensureSpace(50);
+
+            /* Accent bar + colored label */
+            const [r, g, b] = s.color;
+            doc.setFillColor(r, g, b);
+            doc.rect(margin, cursorY - 10, 4, 13, 'F');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(11);
+            doc.setTextColor(r, g, b);
+            doc.text(s.label, margin + 12, cursorY);
+            cursorY += 20;
+
+            /* Body — split into paragraphs to preserve structure */
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10.5);
+            doc.setTextColor(45, 45, 55);
+
+            const plain = stripMarkdown(s.text || 'Not available.');
+            const paragraphs = plain.split(/\n+/).map(p => p.trim()).filter(Boolean);
+            if (paragraphs.length === 0) paragraphs.push('Not available.');
+
+            paragraphs.forEach(para => {
+                const lines = doc.splitTextToSize(para, contentWidth);
+                lines.forEach(line => {
+                    ensureSpace(lineHeight);
+                    doc.text(line, margin, cursorY);
+                    cursorY += lineHeight;
+                });
+                cursorY += 4;
+            });
+
+            cursorY += 14;
+        });
+
+        /* Footer on every page */
+        const total = doc.getNumberOfPages();
+        for (let p = 1; p <= total; p++) {
+            doc.setPage(p);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(150, 150, 160);
+            doc.text(
+                `Case Digest  ·  Page ${p} of ${total}`,
+                pageWidth / 2,
+                pageHeight - 22,
+                { align: 'center' }
+            );
+        }
+
+        /* Filename */
+        const safeTitle = (currentDigest.title || 'case-digest')
+            .replace(/[^a-z0-9\-_ ]/gi, '')
+            .trim()
+            .replace(/\s+/g, '_')
+            .slice(0, 70) || 'case-digest';
+
+        doc.save(`${safeTitle}.pdf`);
+        setStatus(`PDF downloaded — ${safeTitle}.pdf`, 'success');
+    } catch (err) {
+        console.error('PDF generation error:', err);
+        showError(`Could not generate PDF: ${err.message}`);
+        setStatus('PDF generation failed', 'error');
+    }
+}
 /* ------------------------------------------------------------------ */
 /* Gemini call — prompt tuned to PUP case-digest rubric (15/15 target) */
 /* ------------------------------------------------------------------ */
@@ -786,6 +933,7 @@ clearBtn.addEventListener('click', () => {
 
 digestBtn.addEventListener('click', handleGenerateDigest);
 saveBtn.addEventListener('click', handleSaveDigest);
+downloadPdfBtn.addEventListener('click', downloadDigestPDF); // 👈 ADD
 
 if (restoreKeyBtn) {
     restoreKeyBtn.addEventListener('click', () => {
