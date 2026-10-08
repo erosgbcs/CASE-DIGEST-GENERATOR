@@ -152,7 +152,7 @@ function emptyDigestMarkup() {
 function resetDigestDisplay() {
     digestOutput.innerHTML = emptyDigestMarkup();
 }
-function updateActionButtons() {
+function updateSaveButton() {
     if (saveBtn) saveBtn.disabled = !currentDigest || !cloudReady;
     if (downloadPdfBtn) downloadPdfBtn.disabled = !currentDigest;
 }
