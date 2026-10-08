@@ -1,374 +1,827 @@
-// script.js — case digest generation
+// script.js — case digest generation + shared digests (Firebase Firestore)
 
-(function() {
-    const GEMINI_MODEL = 'gemini-3.6-flash';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+    getFirestore,
+    collection,
+    addDoc,
+    deleteDoc,
+    doc,
+    updateDoc,
+    onSnapshot,
+    query,
+    orderBy,
+    serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    const loadingScreen = document.getElementById('loadingScreen');
-    const loadingStartedAt = performance.now();
+/* ------------------------------------------------------------------ */
+/* Firebase setup                                                      */
+/* ------------------------------------------------------------------ */
+const firebaseConfig = {
+    apiKey: "AIzaSyAhLv7VZT6LSSZg_LL3oSK60BEsqfSJr-Q",
+    authDomain: "case-1a0d5.firebaseapp.com",
+    projectId: "case-1a0d5",
+    storageBucket: "case-1a0d5.firebasestorage.app",
+    messagingSenderId: "395262673226",
+    appId: "1:395262673226:web:32affea4284fc2109601b3",
+    measurementId: "G-B062MQKENP"
+};
 
-    function hideLoadingScreen() {
-        const minimumDisplayTime = 900;
-        const remainingDisplayTime = Math.max(0, minimumDisplayTime - (performance.now() - loadingStartedAt));
-        window.setTimeout(() => {
-            if (!loadingScreen) return;
-            loadingScreen.classList.add('is-hidden');
-            window.setTimeout(() => loadingScreen.remove(), 700);
-        }, remainingDisplayTime);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const digestsCol = collection(db, 'digests');
+
+const GEMINI_MODEL = 'gemini-3.6-flash';
+
+/* Default Gemini API key — users don't need to enter one. */
+const DEFAULT_GEMINI_KEY = 'AQ.Ab8RN6KHChQphLSg-JGeqb6gT05SfxbsM_nM-47JnteQLPuZjw';
+
+/* ------------------------------------------------------------------ */
+/* Loading screen                                                      */
+/* ------------------------------------------------------------------ */
+const loadingScreen = document.getElementById('loadingScreen');
+const loadingStartedAt = performance.now();
+
+function hideLoadingScreen() {
+    const minimumDisplayTime = 900;
+    const remainingDisplayTime = Math.max(0, minimumDisplayTime - (performance.now() - loadingStartedAt));
+    window.setTimeout(() => {
+        if (!loadingScreen) return;
+        loadingScreen.classList.add('is-hidden');
+        window.setTimeout(() => loadingScreen.remove(), 700);
+    }, remainingDisplayTime);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', hideLoadingScreen, { once: true });
+} else {
+    hideLoadingScreen();
+}
+
+/* ------------------------------------------------------------------ */
+/* DOM elements                                                        */
+/* ------------------------------------------------------------------ */
+const lawphilRef = document.getElementById('lawphilRef');
+const caseTextArea = document.getElementById('caseText');
+const geminiKeyInput = document.getElementById('geminiKey');
+const restoreKeyBtn = document.getElementById('restoreKeyBtn');
+const digestBtn = document.getElementById('digestBtn');
+const saveBtn = document.getElementById('saveBtn');
+const clearBtn = document.getElementById('clearBtn');
+const statusMsg = document.getElementById('statusMsg');
+const digestOutput = document.getElementById('digestOutput');
+const errorContainer = document.getElementById('errorContainer');
+const savedList = document.getElementById('savedList');
+const savedCount = document.getElementById('savedCount');
+const clearSavedBtn = document.getElementById('clearSavedBtn');
+
+/* ------------------------------------------------------------------ */
+/* State                                                               */
+/* ------------------------------------------------------------------ */
+let currentDigest = null;   // { title, sections } — the digest on screen
+let activeSavedId = null;   // Firestore doc id currently displayed
+let savedDigests = [];      // in-memory mirror of the Firestore collection
+let cloudReady = false;     // true after first snapshot arrives
+
+/* ------------------------------------------------------------------ */
+/* Status helpers                                                      */
+/* ------------------------------------------------------------------ */
+function setStatus(message, type = 'ready') {
+    let icon = '<span class="w-2.5 h-2.5 rounded-full bg-mint-400 animate-dot-pulse flex-shrink-0"></span>';
+
+    if (type === 'loading') {
+        icon = '<span class="inline-block w-4 h-4 border-[2.5px] border-blush-200 border-t-blush-500 rounded-full animate-spin-slow flex-shrink-0"></span>';
+    } else if (type === 'error') {
+        icon = `<svg class="w-4 h-4 text-red-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>`;
+    } else if (type === 'success') {
+        icon = `<svg class="w-4 h-4 text-blush-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>`;
+    } else if (type === 'warn') {
+        icon = `<svg class="w-4 h-4 text-orange-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>`;
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', hideLoadingScreen, { once: true });
-    } else {
-        hideLoadingScreen();
-    }
+    statusMsg.innerHTML = `${icon} <span>${message}</span>`;
+}
 
-    // DOM elements
-    const lawphilRef = document.getElementById('lawphilRef');
-    const caseTextArea = document.getElementById('caseText');
-    const geminiKeyInput = document.getElementById('geminiKey');
-    const digestBtn = document.getElementById('digestBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const statusMsg = document.getElementById('statusMsg');
-    const digestOutput = document.getElementById('digestOutput');
-    const errorContainer = document.getElementById('errorContainer');
+function clearError() {
+    errorContainer.innerHTML = '';
+}
 
-    // ---- helper: show status ----
-    function setStatus(message, type = 'ready') {
-        let icon = '<span class="w-2.5 h-2.5 rounded-full bg-mint-400 animate-dot-pulse flex-shrink-0"></span>';
-
-        if (type === 'loading') {
-            icon = '<span class="inline-block w-4 h-4 border-[2.5px] border-blush-200 border-t-blush-500 rounded-full animate-spin-slow flex-shrink-0"></span>';
-        } else if (type === 'error') {
-            icon = `<svg class="w-4 h-4 text-red-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+function showError(message) {
+    errorContainer.innerHTML = `
+        <div class="animate-shake bg-gradient-to-br from-red-100 to-pink-100 border-l-[6px] border-red-400 text-red-800 px-5 py-4 rounded-2xl my-4 font-semibold text-sm shadow-sm flex items-start gap-2">
+            <svg class="w-5 h-5 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/>
-                <line x1="15" y1="9" x2="9" y2="15"/>
-                <line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>`;
-        } else if (type === 'success') {
-            icon = `<svg class="w-4 h-4 text-blush-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>`;
-        } else if (type === 'warn') {
-            icon = `<svg class="w-4 h-4 text-orange-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>`;
-        }
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>${message}</span>
+        </div>
+    `;
+    errorContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 
-        statusMsg.innerHTML = `${icon} <span>${message}</span>`;
+/* ------------------------------------------------------------------ */
+/* Empty states / reset                                                */
+/* ------------------------------------------------------------------ */
+function emptyDigestMarkup() {
+    return `
+        <div class="text-center py-10 sm:py-12">
+            <svg class="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 text-blush-300 animate-bobble" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+                <line x1="9" y1="11" x2="15" y2="11"/>
+            </svg>
+            <div class="font-bold text-slate-600 text-base sm:text-lg mb-1">Your case digest will appear here</div>
+            <div class="text-xs sm:text-sm text-slate-400 tracking-wide">Facts · Issue · Ruling · Lesson Learned</div>
+        </div>
+    `;
+}
+
+function resetDigestDisplay() {
+    digestOutput.innerHTML = emptyDigestMarkup();
+}
+
+function updateSaveButton() {
+    if (!saveBtn) return;
+    saveBtn.disabled = !currentDigest || !cloudReady;
+}
+
+function clearAll() {
+    clearError();
+    resetDigestDisplay();
+    setStatus('Ready when you are', 'ready');
+    digestBtn.disabled = false;
+    lawphilRef.value = '';
+    caseTextArea.value = '';
+    geminiKeyInput.value = DEFAULT_GEMINI_KEY;
+    currentDigest = null;
+    activeSavedId = null;
+    updateSaveButton();
+}
+
+/* ------------------------------------------------------------------ */
+/* Gemini call — prompt tuned to PUP case-digest rubric (15/15 target) */
+/* ------------------------------------------------------------------ */
+async function generateDigest(caseText, apiKey) {
+    if (!caseText || caseText.trim().length < 50) {
+        throw new Error('Please paste a longer case text (at least 50 characters).');
     }
+    
+    const prompt = `You are an expert Philippine legal analyst and law professor. Your task is to produce a MODEL CASE DIGEST that would score a PERFECT 15/15 on ALL FOUR criteria of the PUP Legal Office Management case digest rubric.
 
-    // ---- clear error banner ----
-    function clearError() {
-        errorContainer.innerHTML = '';
-    }
+═══════════════════════════════════════════════════════
+THE FOUR RUBRIC CRITERIA — ALL MUST HIT "EXCELLENT WORK" (15/15)
+═══════════════════════════════════════════════════════
 
-    // ---- display error ----
-    function showError(message) {
-        errorContainer.innerHTML = `
-            <div class="animate-shake bg-gradient-to-br from-red-100 to-pink-100 border-l-[6px] border-red-400 text-red-800 px-5 py-4 rounded-2xl my-4 font-semibold text-sm shadow-sm flex items-start gap-2">
-                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="8" x2="12" y2="12"/>
-                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                <span>${message}</span>
-            </div>
-        `;
-        errorContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+[1] RELEVANCE OF ANSWER TO THE QUESTION (15/15)
+    - Answer is complete; sufficient detail is provided to support every assertion.
+    - Focuses ONLY on issues related to the question — introduce NO unrelated content.
+    - Every statement must be factually correct and directly traceable to the case text.
 
-    // ---- clear digest output ----
-    function resetDigestDisplay() {
-        digestOutput.innerHTML = `
-            <div class="text-center py-10 sm:py-12">
-                <svg class="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 text-blush-300 animate-bobble" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <line x1="9" y1="15" x2="15" y2="15"/>
-                    <line x1="9" y1="11" x2="15" y2="11"/>
-                </svg>
-                <div class="font-bold text-slate-600 text-base sm:text-lg mb-1">Your case digest will appear here</div>
-                <div class="text-xs sm:text-sm text-slate-400 tracking-wide">Facts · Issue · Ruling · Lesson Learned</div>
-            </div>
-        `;
-    }
+[2] THOROUGHNESS OF ANSWER (15/15)
+    - Deals fully with the entire question.
+    - Include ALL essential details; leave no gaps in the narrative chain.
 
-    // ---- reset everything ----
-    function clearAll() {
-        clearError();
-        resetDigestDisplay();
-        setStatus('Ready when you are', 'ready');
-        digestBtn.disabled = false;
-        lawphilRef.value = '';
-        caseTextArea.value = '';
-        geminiKeyInput.value = '';
-    }
+[3] ORGANIZATION, BASIS AND LOGIC OF ANSWER (15/15)
+    - Clear and logical presentation; well-developed argument.
+    - Transitions between ideas must be smooth and explicit.
+    - Every conclusion must be supported by a SOURCE or BASIS drawn from the case (cite the ponente, the specific Article of the Civil Code/Constitution/Rules of Court, or the doctrinal principle invoked).
 
-    // ---- call Gemini API ----
-    async function generateDigest(caseText, apiKey) {
-        if (!caseText || caseText.trim().length < 50) {
-            throw new Error('Please paste a longer case text (at least 50 characters).');
-        }
+[4] MECHANICS OF WRITING (15/15)
+    - Clear, readable, formal legal prose.
+    - Strong transitions; no spelling, punctuation, or grammar errors.
+    - No awkward sentence constructions.
 
-        const prompt = `You are a legal analyst. Based on the following Philippine Supreme Court case text, create a case digest with EXACTLY these four sections: **Facts**, **Issue**, **Ruling**, and **Lesson Learned**.
+═══════════════════════════════════════════════════════
+REQUIRED OUTPUT — EXACTLY FIVE SECTIONS, IN THIS ORDER
+═══════════════════════════════════════════════════════
 
-Requirements:
-- Be concise but comprehensive.
-- Facts: summarize the relevant background and procedural history.
-- Issue: state the legal question(s) clearly.
-- Ruling: explain the court's decision and reasoning.
-- Lesson Learned: provide a practical takeaway or legal doctrine.
+**Title:** The short case name only, in "Surname v. Surname" form (e.g., "Gabriel v. Court of Appeals"). NO G.R. numbers, NO dates, NO docket numbers, NO "Philippines".
 
-Case text:
+**Facts:** The complete factual and procedural narrative — the parties involved, what happened, the trial court proceedings, the appellate court proceedings, and how the case reached the Supreme Court. Include the specific acts or omissions that triggered the dispute. Use only facts stated in the case text — do not invent or speculate.
+
+**Issue:** State the legal question(s) precisely. Use the form "Whether…" or "W/N…". If there are multiple issues, number them (1), (2), (3), etc. Frame each issue so it directly corresponds to the ruling.
+
+**Ruling:** The Court's disposition and its reasoning. Cite the SPECIFIC legal basis — the applicable Article of the Civil Code/Revised Penal Code/Constitution/Rules of Court, the statute, or the doctrinal ruling invoked by the ponente. Explain HOW the Court arrived at its conclusion (the ratio decidendi), not merely what it concluded.
+
+**Lesson Learned:** The practical takeaway or legal doctrine distilled from the case. State what a legal office practitioner or law student should remember and apply. Directly tie this to the ruling — do not introduce new doctrines not discussed in the case.
+
+═══════════════════════════════════════════════════════
+CASE TEXT
+═══════════════════════════════════════════════════════
 """
 ${caseText}
 """
 
-Return your answer with the headings "Facts:", "Issue:", "Ruling:", "Lesson Learned:" on separate lines. Do not add extra sections.
-
-FORMATTING RULES (follow strictly):
-- Use **double asterisks** around key legal terms, case names, statutes, and important phrases to make them bold.
-- Use *single asterisks* around Latin terms, case citations, or slight emphasis.
+═══════════════════════════════════════════════════════
+FORMATTING RULES (STRICT — VIOLATIONS WILL BE PENALIZED)
+═══════════════════════════════════════════════════════
+- Use **double asterisks** around key legal terms, party surnames, statutes, and doctrines to make them bold.
+- Use *single asterisks* around Latin terms and case citations for italics.
 - Do NOT use markdown headings (#), bullet symbols with hashes, or code blocks.
-- Plain sentences with inline **bold** and *italic* only.`;
+- Use plain, formal legal English with inline bold/italic only.
+- Begin each section on its own line with the exact headings: "Title:", "Facts:", "Issue:", "Ruling:", "Lesson Learned:"
+- Do not add any section other than the five required above.
 
-        setStatus('Gemini is thinking…', 'loading');
-
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-        const requestBody = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.2 }
-};
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                const errorMsg = errorData.error?.message || `Gemini API error (${response.status})`;
-                throw new Error(errorMsg);
-            }
-
-            const data = await response.json();
-            const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!generatedText) throw new Error('Gemini returned an empty response.');
-            return generatedText;
-        } catch (err) {
-            if (err.message.includes('API key not valid')) {
-                throw new Error('Invalid Gemini API key. Please check the key you entered.');
-            }
-            if (err.message.includes('not found') || err.message.includes('not supported')) {
-                throw new Error(`Model ${GEMINI_MODEL} is not available. Check the model name or your API access.`);
-            }
-            throw err;
+Now produce the digest:`;
+    
+    setStatus('Gemini is thinking…', 'loading');
+    
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+    const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2 }
+    };
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMsg = errorData.error?.message || `Gemini API error (${response.status})`;
+            throw new Error(errorMsg);
         }
+        
+        const data = await response.json();
+        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!generatedText) throw new Error('Gemini returned an empty response.');
+        return generatedText;
+    } catch (err) {
+        if (err.message.includes('API key not valid')) {
+            throw new Error('Invalid Gemini API key. Please check the key you entered.');
+        }
+        if (err.message.includes('not found') || err.message.includes('not supported')) {
+            throw new Error(`Model ${GEMINI_MODEL} is not available. Check the model name or your API access.`);
+        }
+        throw err;
     }
+}
 
-    // ---- parse digest sections ----
-    function parseDigestSections(rawText) {
-        const sections = {
-            facts: 'Not available.',
-            issue: 'Not available.',
-            ruling: 'Not available.',
-            lesson: 'Not available.'
-        };
 
-        const lines = rawText.split(/\r?\n/);
-        let currentSection = null;
-        let buffer = [];
 
-        const sectionKeywords = {
-            'facts': 'facts',
-            'issue': 'issue',
-            'ruling': 'ruling',
-            'lesson learned': 'lesson',
-            'lesson': 'lesson'
-        };
-
-        for (let line of lines) {
-            const trimmed = line.trim();
-            let matchedSection = null;
-
-            for (let [keyword, sectionKey] of Object.entries(sectionKeywords)) {
-                const regex = new RegExp(`^\\**\\s*${keyword}\\s*\\**\\s*:?`, 'i');
-                if (regex.test(trimmed)) {
-                    matchedSection = sectionKey;
-                    break;
-                }
-            }
-
-            if (matchedSection) {
-                if (currentSection && buffer.length > 0) {
-                    const content = buffer.join('\n').trim();
-                    if (content) sections[currentSection] = content;
-                }
-                currentSection = matchedSection;
-                buffer = [];
-                const colonIndex = trimmed.indexOf(':');
-                if (colonIndex !== -1 && colonIndex < trimmed.length - 1) {
-                    const afterColon = trimmed.substring(colonIndex + 1).trim();
-                    if (afterColon) buffer.push(afterColon);
-                }
-            } else {
-                if (currentSection) buffer.push(trimmed);
-            }
-        }
-
-        if (currentSection && buffer.length > 0) {
-            const content = buffer.join('\n').trim();
-            if (content) sections[currentSection] = content;
-        }
-
-        return sections;
-    }
-
-    // ---- SVG icon templates for digest sections ----
-    const SECTION_ICONS = {
-        facts: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-        </svg>`,
-        issue: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>`,
-        ruling: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3v18"/>
-            <path d="M5 7l7-4 7 4"/>
-            <path d="M5 7l-2 6a3 3 0 0 0 6 0L7 7"/>
-            <path d="M19 7l-2 6a3 3 0 0 0 6 0l-2-6"/>
-            <path d="M3 21h18"/>
-        </svg>`,
-        lesson: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
-            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
-        </svg>`,
+/* ------------------------------------------------------------------ */
+/* Parsing                                                             */
+/* ------------------------------------------------------------------ */
+function parseDigestSections(rawText) {
+    const sections = {
+        title: '',
+        facts: 'Not available.',
+        issue: 'Not available.',
+        ruling: 'Not available.',
+        lesson: 'Not available.'
     };
 
-    // ---- render digest with SVG icons ----
-    function renderDigest(sections) {
-        const facts = sections.facts || 'Not available.';
-        const issue = sections.issue || 'Not available.';
-        const ruling = sections.ruling || 'Not available.';
-        const lesson = sections.lesson || 'Not available.';
+    const lines = rawText.split(/\r?\n/);
+    let currentSection = null;
+    let buffer = [];
 
-        const sectionData = [
-            { iconKey: 'facts', title: 'Facts', content: facts, delay: '0.05s', accent: 'from-blush-400 to-blush-500', iconColor: 'text-blush-500' },
-            { iconKey: 'issue', title: 'Issue', content: issue, delay: '0.15s', accent: 'from-lilac-400 to-lilac-500', iconColor: 'text-lilac-500' },
-            { iconKey: 'ruling', title: 'Ruling', content: ruling, delay: '0.25s', accent: 'from-mint-400 to-mint-500', iconColor: 'text-mint-600' },
-            { iconKey: 'lesson', title: 'Lesson Learned', content: lesson, delay: '0.35s', accent: 'from-orange-400 to-pink-400', iconColor: 'text-orange-500' },
-        ];
+    const sectionKeywords = {
+        'title': 'title',
+        'case title': 'title',
+        'facts': 'facts',
+        'issue': 'issue',
+        'ruling': 'ruling',
+        'lesson learned': 'lesson',
+        'lesson': 'lesson'
+    };
 
-        digestOutput.innerHTML = sectionData.map(s => `
-            <div class="mb-6 last:mb-0 pb-6 last:pb-0 border-b-2 border-dashed border-blush-100/70 last:border-none animate-fade-up" style="animation-delay:${s.delay};">
-                <div class="flex items-center gap-2.5 mb-3">
-                    <span class="inline-block w-1.5 h-5 rounded-full bg-gradient-to-b ${s.accent}"></span>
-                    <span class="${s.iconColor}">${SECTION_ICONS[s.iconKey]}</span>
-                    <h3 class="text-xs sm:text-sm font-extrabold uppercase tracking-[1.5px] bg-gradient-to-r ${s.accent} bg-clip-text text-transparent">
-                        ${s.title}
-                    </h3>
-                </div>
-                <div class="text-sm sm:text-[15px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words bg-white rounded-2xl px-4 py-3.5 border-2 border-blush-100/70 shadow-sm">
-                         ${formatText(s.content)}
-                </div>
+    for (let line of lines) {
+        const trimmed = line.trim();
+        let matchedSection = null;
+
+        for (let [keyword, sectionKey] of Object.entries(sectionKeywords)) {
+            const regex = new RegExp(`^\\**\\s*${keyword}\\s*\\**\\s*:?`, 'i');
+            if (regex.test(trimmed)) {
+                matchedSection = sectionKey;
+                break;
+            }
+        }
+
+        if (matchedSection) {
+            if (currentSection && buffer.length > 0) {
+                const content = buffer.join('\n').trim();
+                if (content) sections[currentSection] = content;
+            }
+            currentSection = matchedSection;
+            buffer = [];
+            const colonIndex = trimmed.indexOf(':');
+            if (colonIndex !== -1 && colonIndex < trimmed.length - 1) {
+                const afterColon = trimmed.substring(colonIndex + 1).trim();
+                if (afterColon) buffer.push(afterColon);
+            }
+        } else {
+            if (currentSection) buffer.push(trimmed);
+        }
+    }
+
+    if (currentSection && buffer.length > 0) {
+        const content = buffer.join('\n').trim();
+        if (content) sections[currentSection] = content;
+    }
+
+    sections.title = cleanTitle(sections.title);
+    return sections;
+}
+
+function cleanTitle(raw) {
+    let t = (raw || '').toString().trim();
+    t = t.replace(/^\*+|\*+$/g, '').replace(/^_+|_+$/g, '');
+    t = t.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '');
+    t = t.replace(/\s+/g, ' ').trim();
+    t = t.replace(/[.;,\s]+$/, '');
+    return t;
+}
+
+function deriveTitleFromCaseText(text) {
+    if (!text) return '';
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const vsPattern = /(?:^|\s)(?:vs?\.?|versus)(?:\s|$)/i;
+
+    for (const line of lines.slice(0, 15)) {
+        let cleaned = line.replace(/\s+/g, ' ').trim();
+        if (!vsPattern.test(cleaned)) continue;
+        if (cleaned.length < 8 || cleaned.length > 200) continue;
+
+        cleaned = cleaned
+            .replace(/,\s*(petitioner|respondent|appellant|appellee|plaintiff|defendant|accused|complainant|oppositor)s?[,\s]*/gi, ' ')
+            .replace(/(?:^|\s)(?:vs?\.?|versus)(?:\s|$)/i, ' v. ')
+            .replace(/\s+/g, ' ')
+            .replace(/[.;,\s]+$/, '')
+            .trim();
+
+        if (cleaned) return cleaned;
+    }
+    return '';
+}
+
+/* ------------------------------------------------------------------ */
+/* Section icons                                                       */
+/* ------------------------------------------------------------------ */
+const SECTION_ICONS = {
+    facts: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+    </svg>`,
+    issue: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>`,
+    ruling: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v18"/>
+        <path d="M5 7l7-4 7 4"/>
+        <path d="M5 7l-2 6a3 3 0 0 0 6 0L7 7"/>
+        <path d="M19 7l-2 6a3 3 0 0 0 6 0l-2-6"/>
+        <path d="M3 21h18"/>
+    </svg>`,
+    lesson: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+    </svg>`,
+    bookmark: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+    </svg>`
+};
+
+/* ------------------------------------------------------------------ */
+/* Rendering the digest                                                */
+/* ------------------------------------------------------------------ */
+function renderDigest(sections, title) {
+    const facts = sections.facts || 'Not available.';
+    const issue = sections.issue || 'Not available.';
+    const ruling = sections.ruling || 'Not available.';
+    const lesson = sections.lesson || 'Not available.';
+
+    const sectionData = [
+        { iconKey: 'facts', title: 'Facts', content: facts, delay: '0.05s', accent: 'from-blush-400 to-blush-500', iconColor: 'text-blush-500' },
+        { iconKey: 'issue', title: 'Issue', content: issue, delay: '0.15s', accent: 'from-lilac-400 to-lilac-500', iconColor: 'text-lilac-500' },
+        { iconKey: 'ruling', title: 'Ruling', content: ruling, delay: '0.25s', accent: 'from-mint-400 to-mint-500', iconColor: 'text-mint-600' },
+        { iconKey: 'lesson', title: 'Lesson Learned', content: lesson, delay: '0.35s', accent: 'from-orange-400 to-pink-400', iconColor: 'text-orange-500' },
+    ];
+
+    const header = title ? `
+        <div class="flex items-start gap-3 mb-5 pb-5 border-b-2 border-dashed border-blush-100/70 animate-fade-up">
+            <span class="mt-0.5 w-9 h-9 flex-shrink-0 grid place-items-center rounded-xl bg-gradient-to-br from-blush-100 to-lilac-100 text-blush-500">
+                ${SECTION_ICONS.bookmark}
+            </span>
+            <div class="min-w-0">
+                <p class="text-[10px] font-extrabold uppercase tracking-[1.5px] text-slate-400 mb-0.5">Case Title</p>
+                <h2 class="text-base sm:text-lg font-extrabold text-slate-800 leading-snug break-words">
+                    ${escapeHtml(title)}
+                </h2>
             </div>
-        `).join('');
-    }
+        </div>
+    ` : '';
 
-    // ---- escape HTML ----
-    function escapeHtml(text) {
-        if (!text) return '';
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
+    digestOutput.innerHTML = header + sectionData.map(s => `
+        <div class="mb-6 last:mb-0 pb-6 last:pb-0 border-b-2 border-dashed border-blush-100/70 last:border-none animate-fade-up" style="animation-delay:${s.delay};">
+            <div class="flex items-center gap-2.5 mb-3">
+                <span class="inline-block w-1.5 h-5 rounded-full bg-gradient-to-b ${s.accent}"></span>
+                <span class="${s.iconColor}">${SECTION_ICONS[s.iconKey]}</span>
+                <h3 class="text-xs sm:text-sm font-extrabold uppercase tracking-[1.5px] bg-gradient-to-r ${s.accent} bg-clip-text text-transparent">
+                    ${s.title}
+                </h3>
+            </div>
+            <div class="text-sm sm:text-[15px] leading-relaxed text-slate-700 whitespace-pre-wrap break-words bg-white rounded-2xl px-4 py-3.5 border-2 border-blush-100/70 shadow-sm">
+                     ${formatText(s.content)}
+            </div>
+        </div>
+    `).join('');
+}
 
-    // ---- format text: escape first, then convert markdown to HTML ----
-    function formatText(text) {
-        if (!text) return '';
+function escapeHtml(text) {
+    if (!text) return '';
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
-        // 1. Escape raw HTML so any tags in the AI output are neutralized
-        let html = escapeHtml(text);
+function formatText(text) {
+    if (!text) return '';
 
-        // 2. **bold** → <strong>
-        html = html.replace(/\*\*([^*]+)\*\*/g,
-            '<strong class="font-bold text-slate-900">$1</strong>');
+    let html = escapeHtml(text);
 
-        // 3. __bold__ → <strong> (Gemini sometimes uses this)
-        html = html.replace(/__([^_]+)__/g,
-            '<strong class="font-bold text-slate-900">$1</strong>');
+    html = html.replace(/\*\*([^*]+)\*\*/g,
+        '<strong class="font-bold text-slate-900">$1</strong>');
 
-        // 4. *italic* → <em> (after bold is handled, so ** isn't eaten)
-        html = html.replace(/\*([^*\n]+)\*/g,
-            '<em class="italic text-slate-700">$1</em>');
+    html = html.replace(/__([^_]+)__/g,
+        '<strong class="font-bold text-slate-900">$1</strong>');
 
-        // 5. _italic_ → <em>
-        html = html.replace(/(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])/g,
-            '<em class="italic text-slate-700">$1</em>');
+    html = html.replace(/\*([^*\n]+)\*/g,
+        '<em class="italic text-slate-700">$1</em>');
 
-        return html;
-    }
+    html = html.replace(/(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])/g,
+        '<em class="italic text-slate-700">$1</em>');
 
-    // ---- main handler ----
-    async function handleGenerateDigest() {
-        clearError();
-        resetDigestDisplay();
-        digestBtn.disabled = true;
+    return html;
+}
 
-        const caseText = caseTextArea.value.trim();
-        const apiKey = geminiKeyInput.value.trim();
+/* ------------------------------------------------------------------ */
+/* Firestore sync (live)                                               */
+/* ------------------------------------------------------------------ */
+function subscribeToSavedDigests() {
+    const q = query(digestsCol, orderBy('savedAt', 'desc'));
 
-        if (!caseText) {
-            showError('Please paste the case text in the case text area.');
-            setStatus('Missing case text', 'warn');
-            digestBtn.disabled = false;
-            return;
+    onSnapshot(q,
+        (snapshot) => {
+            savedDigests = snapshot.docs.map(docSnap => {
+                const data = docSnap.data() || {};
+                return {
+                    id: docSnap.id,
+                    title: data.title || 'Untitled Case Digest',
+                    sections: data.sections || {},
+                    savedAt: data.savedAt && typeof data.savedAt.toDate === 'function'
+                        ? data.savedAt.toDate().getTime()
+                        : (data.savedAt || Date.now())
+                };
+            });
+
+            cloudReady = true;
+            renderSavedList();
+            updateSaveButton();
+
+            if (!activeSavedId && !currentDigest) {
+                setStatus('Ready when you are — saved digests are shared with everyone', 'ready');
+            }
+        },
+        (error) => {
+            console.error('Firestore subscription error:', error);
+            cloudReady = false;
+            updateSaveButton();
+            showError('Could not connect to the shared digest database. Check your Firestore rules and network.');
+            setStatus('Cloud sync offline', 'error');
         }
+    );
+}
 
-        if (!apiKey) {
-            showError('Please enter your Gemini API key.');
-            setStatus('Missing API key', 'warn');
-            digestBtn.disabled = false;
-            return;
-        }
+/* ------------------------------------------------------------------ */
+/* Saved digests — rendering                                           */
+/* ------------------------------------------------------------------ */
+const ICON_OPEN = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+</svg>`;
+const ICON_EDIT = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+</svg>`;
+const ICON_TRASH = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+</svg>`;
+const ICON_CALENDAR = `<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+</svg>`;
+
+function formatDate(timestamp) {
+    try {
+        return new Date(timestamp).toLocaleDateString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric'
+        });
+    } catch (err) {
+        return '';
+    }
+}
+
+function renderSavedList() {
+    if (!savedList) return;
+
+    if (savedCount) savedCount.textContent = String(savedDigests.length);
+    if (clearSavedBtn) clearSavedBtn.disabled = savedDigests.length === 0 || !cloudReady;
+
+    if (!cloudReady) {
+        savedList.innerHTML = `
+            <div class="sm:col-span-2 rounded-2xl border-2 border-dashed border-blush-100 bg-white/60 px-5 py-8 text-center">
+                <span class="inline-block w-6 h-6 border-[2.5px] border-blush-200 border-t-blush-500 rounded-full animate-spin-slow mb-2"></span>
+                <p class="text-sm font-semibold text-slate-500">Connecting to the shared digest database…</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (!savedDigests.length) {
+        savedList.innerHTML = `
+            <div class="sm:col-span-2 rounded-2xl border-2 border-dashed border-blush-100 bg-white/60 px-5 py-8 text-center">
+                <svg class="w-8 h-8 mx-auto mb-2 text-blush-200 animate-bobble" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                </svg>
+                <p class="text-sm font-semibold text-slate-500">No saved digests yet</p>
+                <p class="text-xs text-slate-400 mt-1">
+                    Generate a digest, then tap <strong class="text-mint-600 font-bold">Save Digest</strong> — everyone will see it here.
+                </p>
+            </div>
+        `;
+        return;
+    }
+
+    savedList.innerHTML = savedDigests.map(item => `
+        <article class="group relative flex items-start gap-2 rounded-2xl border-2 border-blush-100 bg-white/90 p-3.5 transition-all duration-300 hover:border-mint-300 hover:shadow-[0_10px_25px_-12px_rgba(20,184,166,0.45)] hover:-translate-y-0.5 animate-fade-up">
+            <button type="button" data-action="open" data-id="${escapeHtml(item.id)}"
+                    class="flex-1 min-w-0 text-left rounded-xl px-1 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-mint-300">
+                <h3 class="font-bold text-slate-800 text-sm leading-snug break-words group-hover:text-mint-700 transition-colors duration-200">
+                    ${escapeHtml(item.title || 'Untitled Case Digest')}
+                </h3>
+                <p class="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
+                    <span class="text-mint-500">${ICON_CALENDAR}</span>
+                    <span>${escapeHtml(formatDate(item.savedAt))}</span>
+                </p>
+            </button>
+            <div class="flex flex-col gap-1 flex-shrink-0">
+                <button type="button" data-action="rename" data-id="${escapeHtml(item.id)}"
+                        title="Rename" aria-label="Rename digest"
+                        class="w-7 h-7 grid place-items-center rounded-lg text-slate-400 hover:text-lilac-600 hover:bg-lilac-50 transition-colors duration-200">
+                    ${ICON_EDIT}
+                </button>
+                <button type="button" data-action="delete" data-id="${escapeHtml(item.id)}"
+                        title="Delete" aria-label="Delete digest"
+                        class="w-7 h-7 grid place-items-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-200">
+                    ${ICON_TRASH}
+                </button>
+            </div>
+        </article>
+    `).join('');
+}
+
+/* ------------------------------------------------------------------ */
+/* Saved digests — actions (Firestore)                                 */
+/* ------------------------------------------------------------------ */
+async function handleSaveDigest() {
+    if (!currentDigest) {
+        showError('Generate a digest first, then save it.');
+        return;
+    }
+    if (!cloudReady) {
+        showError('Still connecting to the shared database. Please wait a moment and try again.');
+        return;
+    }
+
+    const title = cleanTitle(currentDigest.title) || 'Untitled Case Digest';
+
+    const duplicate = savedDigests.find(
+        d => (d.title || '').toLowerCase() === title.toLowerCase()
+    );
+
+    if (duplicate) {
+        const ok = window.confirm(`A shared digest titled "${duplicate.title}" already exists.\n\nOverwrite it for everyone?`);
+        if (!ok) return;
 
         try {
-            const digestRaw = await generateDigest(caseText, apiKey);
-            const sections = parseDigestSections(digestRaw);
-            renderDigest(sections);
-            setStatus('Digest generated successfully!', 'success');
-            digestOutput.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            await updateDoc(doc(db, 'digests', duplicate.id), {
+                title,
+                sections: currentDigest.sections,
+                savedAt: serverTimestamp()
+            });
+            activeSavedId = duplicate.id;
+            setStatus(`Updated “${title}” for everyone`, 'success');
         } catch (err) {
             console.error(err);
-            const errorMsg = err.message || 'An unexpected error occurred.';
-            showError(errorMsg);
-            setStatus('Generation failed', 'error');
-        } finally {
-            digestBtn.disabled = false;
+            showError(`Could not update digest: ${err.message}`);
+            setStatus('Save failed', 'error');
         }
+        return;
     }
 
-    // ---- clear button ----
-    clearBtn.addEventListener('click', () => {
-        clearAll();
-        caseTextArea.focus();
-    });
+    try {
+        const ref = await addDoc(digestsCol, {
+            title,
+            sections: currentDigest.sections,
+            savedAt: serverTimestamp()
+        });
+        activeSavedId = ref.id;
+        setStatus(`Saved “${title}” — visible to everyone`, 'success');
+    } catch (err) {
+        console.error(err);
+        showError(`Could not save to the shared database: ${err.message}`);
+        setStatus('Save failed', 'error');
+    }
+}
 
-    // ---- digest button ----
-    digestBtn.addEventListener('click', handleGenerateDigest);
+function openSavedDigest(id) {
+    const item = savedDigests.find(d => d.id === id);
+    if (!item) return;
 
-    // ---- initial state ----
+    currentDigest = { title: item.title, sections: item.sections };
+    activeSavedId = id;
+    updateSaveButton();
+    renderDigest(item.sections, item.title);
+    setStatus(`Loaded “${item.title}”`, 'success');
+    digestOutput.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function renameSavedDigest(id) {
+    const item = savedDigests.find(d => d.id === id);
+    if (!item) return;
+
+    const next = window.prompt('Rename this digest (visible to everyone):', item.title || '');
+    if (next === null) return;
+
+    const clean = cleanTitle(next);
+    if (!clean) {
+        setStatus('Title cannot be empty', 'warn');
+        return;
+    }
+
+    try {
+        await updateDoc(doc(db, 'digests', id), { title: clean });
+
+        if (activeSavedId === id && currentDigest) {
+            currentDigest.title = clean;
+            renderDigest(currentDigest.sections, clean);
+        }
+        setStatus(`Renamed to “${clean}”`, 'success');
+    } catch (err) {
+        console.error(err);
+        showError(`Could not rename: ${err.message}`);
+    }
+}
+
+async function deleteSavedDigest(id) {
+    const item = savedDigests.find(d => d.id === id);
+    if (!item) return;
+    if (!window.confirm(`Delete “${item.title || 'Untitled Case Digest'}” for everyone?`)) return;
+
+    try {
+        await deleteDoc(doc(db, 'digests', id));
+        if (activeSavedId === id) activeSavedId = null;
+        setStatus('Digest deleted for everyone', 'ready');
+    } catch (err) {
+        console.error(err);
+        showError(`Could not delete: ${err.message}`);
+    }
+}
+
+async function clearAllSavedDigests() {
+    if (!savedDigests.length) return;
+    if (!window.confirm(`Delete all ${savedDigests.length} shared digest(s) for everyone? This cannot be undone.`)) return;
+
+    setStatus('Deleting all shared digests…', 'loading');
+
+    try {
+        await Promise.all(savedDigests.map(d => deleteDoc(doc(db, 'digests', d.id))));
+        activeSavedId = null;
+        setStatus('All shared digests cleared', 'ready');
+    } catch (err) {
+        console.error(err);
+        showError(`Could not clear all: ${err.message}`);
+        setStatus('Clear failed', 'error');
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Main generate handler                                               */
+/* ------------------------------------------------------------------ */
+async function handleGenerateDigest() {
+    clearError();
     resetDigestDisplay();
-    setStatus('Ready when you are', 'ready');
+    digestBtn.disabled = true;
+
+    const caseText = caseTextArea.value.trim();
+    const apiKey = (geminiKeyInput.value.trim() || DEFAULT_GEMINI_KEY);
+
+    if (!caseText) {
+        showError('Please paste the case text in the case text area.');
+        setStatus('Missing case text', 'warn');
+        digestBtn.disabled = false;
+        return;
+    }
+
+    if (!apiKey) {
+        showError('No Gemini API key available. Please enter one.');
+        setStatus('Missing API key', 'warn');
+        digestBtn.disabled = false;
+        return;
+    }
+
+    currentDigest = null;
+    activeSavedId = null;
+    updateSaveButton();
+
+    try {
+        const digestRaw = await generateDigest(caseText, apiKey);
+        const sections = parseDigestSections(digestRaw);
+
+        const title = cleanTitle(sections.title) || deriveTitleFromCaseText(caseText) || 'Untitled Case Digest';
+        sections.title = title;
+
+        currentDigest = { title, sections };
+        updateSaveButton();
+
+        renderDigest(sections, title);
+        setStatus('Digest generated — tap Save Digest to share it', 'success');
+        digestOutput.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+        console.error(err);
+        const errorMsg = err.message || 'An unexpected error occurred.';
+        showError(errorMsg);
+        setStatus('Generation failed', 'error');
+    } finally {
+        digestBtn.disabled = false;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Event listeners                                                     */
+/* ------------------------------------------------------------------ */
+clearBtn.addEventListener('click', () => {
+    clearAll();
     caseTextArea.focus();
-})();
+});
+
+digestBtn.addEventListener('click', handleGenerateDigest);
+saveBtn.addEventListener('click', handleSaveDigest);
+
+if (restoreKeyBtn) {
+    restoreKeyBtn.addEventListener('click', () => {
+        geminiKeyInput.value = DEFAULT_GEMINI_KEY;
+        setStatus('Default API key restored ✨', 'success');
+    });
+}
+
+if (savedList) {
+    savedList.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-action]');
+        if (!trigger || !savedList.contains(trigger)) return;
+
+        const action = trigger.getAttribute('data-action');
+        const id = trigger.getAttribute('data-id');
+        if (!id) return;
+
+        if (action === 'open') openSavedDigest(id);
+        else if (action === 'rename') renameSavedDigest(id);
+        else if (action === 'delete') deleteSavedDigest(id);
+    });
+}
+
+if (clearSavedBtn) {
+    clearSavedBtn.addEventListener('click', clearAllSavedDigests);
+}
+
+/* ------------------------------------------------------------------ */
+/* Initial state                                                       */
+/* ------------------------------------------------------------------ */
+geminiKeyInput.value = DEFAULT_GEMINI_KEY;  // pre-fill the shared key
+
+resetDigestDisplay();
+renderSavedList();
+updateSaveButton();
+setStatus('Connecting to the shared digest database…', 'loading');
+caseTextArea.focus();
+
+subscribeToSavedDigests();
