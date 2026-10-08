@@ -31,7 +31,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const digestsCol = collection(db, 'digests');
 
-const GEMINI_MODEL = 'gemini-3.6-flash';
+const GEMINI_MODEL = 'gemini-3.8-flash';  // best quality — see MODELS array in generateDigest()
 
 /* Default Gemini API key — users don't need to enter one. */
 const DEFAULT_GEMINI_KEY = 'AQ.Ab8RN6K7BrhTJsWyBEnWN46QQ3OjmpA7lbZ3Z9RTyzanSef-7Q';
@@ -318,7 +318,7 @@ function downloadDigestPDF() {
     }
 }
 /* ------------------------------------------------------------------ */
-/* Gemini call — prompt tuned to PUP case-digest rubric (15/15 target) */
+/* Gemini call — rubric-tuned prompt + multi-model fallback             */
 /* ------------------------------------------------------------------ */
 async function generateDigest(caseText, apiKey) {
     if (!caseText || caseText.trim().length < 50) {
@@ -383,42 +383,95 @@ FORMATTING RULES (STRICT — VIOLATIONS WILL BE PENALIZED)
 
 Now produce the digest:`;
     
-    setStatus('Gemini is thinking…', 'loading');
+    /* ─── Try these models in order. If one is busy/down, fall to the next. */
+    const MODELS = [
+        'gemini-3.8-flash', // 🥇 Newest + smartest flash (best quality)
+        'gemini-3.7-flash', // 🥈 Fast, reliable fallback
+        'gemini-3.6-flash', // 🥉 Stable workhorse fallback
+        'gemini-2.0-flash', // 🛟 Older but extremely stable
+        'gemini-2.0-flash-lite', // 🛟 Ultra-fast emergency fallback
+    ];
     
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
     const requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.2 }
     };
     
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody)
-        });
+    let lastError = null;
+    
+    for (let m = 0; m < MODELS.length; m++) {
+        const model = MODELS[m];
+        setStatus(`Gemini is thinking… (using ${model})`, 'loading');
         
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            const errorMsg = errorData.error?.message || `Gemini API error (${response.status})`;
-            throw new Error(errorMsg);
+        // Up to 2 attempts per model
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 90000);
+            
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    const errorMsg = errorData.error?.message || `Gemini API error (${response.status})`;
+                    
+                    // Overload / rate-limit / demand spike → retry or fallback
+                    const isOverload =
+                        response.status === 503 ||
+                        response.status === 429 ||
+                        /high demand|overloaded|unavailable|try again later|resource.?exhausted/i.test(errorMsg);
+                    
+                    if (isOverload) {
+                        lastError = new Error(errorMsg);
+                        await new Promise(r => setTimeout(r, 1500 * attempt));
+                        continue; // retry same model, or move on if attempts done
+                    }
+                    
+                    // Non-overload error → throw immediately
+                    throw new Error(errorMsg);
+                }
+                
+                const data = await response.json();
+                const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!generatedText) throw new Error('Gemini returned an empty response.');
+                return generatedText;
+                
+            } catch (err) {
+                clearTimeout(timeoutId);
+                
+                if (err.name === 'AbortError') {
+                    lastError = new Error(`Model ${model} timed out.`);
+                    continue;
+                }
+                if (err.message.includes('API key not valid')) {
+                    throw new Error('Invalid Gemini API key. Please check the key you entered.');
+                }
+                if (/not found|not supported|does not exist/i.test(err.message)) {
+                    // Model name invalid for this API version → skip to next model
+                    lastError = err;
+                    break;
+                }
+                // Other errors → retry once
+                lastError = err;
+                await new Promise(r => setTimeout(r, 1000 * attempt));
+            }
         }
-        
-        const data = await response.json();
-        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!generatedText) throw new Error('Gemini returned an empty response.');
-        return generatedText;
-    } catch (err) {
-        if (err.message.includes('API key not valid')) {
-            throw new Error('Invalid Gemini API key. Please check the key you entered.');
-        }
-        if (err.message.includes('not found') || err.message.includes('not supported')) {
-            throw new Error(`Model ${GEMINI_MODEL} is not available. Check the model name or your API access.`);
-        }
-        throw err;
     }
+    
+    // All models + retries exhausted
+    const msg = lastError?.message || '';
+    if (/high demand|overloaded|unavailable|resource.?exhausted/i.test(msg)) {
+        throw new Error('All Gemini models are busy right now. Please wait a minute and try again.');
+    }
+    throw new Error(msg || 'Gemini could not generate a digest. Please try again.');
 }
-
 
 
 /* ------------------------------------------------------------------ */
