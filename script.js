@@ -34,7 +34,7 @@ const digestsCol = collection(db, 'digests');
 const GEMINI_MODEL = 'gemini-3.6-flash';
 
 /* Default Gemini API key — users don't need to enter one. */
-const DEFAULT_GEMINI_KEY = 'AQ.Ab8RN6KHChQphLSg-JGeqb6gT05SfxbsM_nM-47JnteQLPuZjw';
+const DEFAULT_GEMINI_KEY = 'AQ.Ab8RN6K7BrhTJsWyBEnWN46QQ3OjmpA7lbZ3Z9RTyzanSef-7Q';
 
 /* ------------------------------------------------------------------ */
 /* Loading screen                                                      */
